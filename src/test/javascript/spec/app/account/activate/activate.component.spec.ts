@@ -1,72 +1,68 @@
-import { TestBed, async, tick, fakeAsync, inject } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { shallowMount, createLocalVue, Wrapper } from '@vue/test-utils';
+import axios from 'axios';
 
-import { ProjectMjTestModule } from '../../../test.module';
-import { MockActivatedRoute } from '../../../helpers/mock-route.service';
-import { ActivateService } from 'app/account/activate/activate.service';
-import { ActivateComponent } from 'app/account/activate/activate.component';
+import * as config from '@/shared/config/config';
+import Activate from '@/account/activate/activate.vue';
+import ActivateClass from '@/account/activate/activate.component';
+import ActivateService from '@/account/activate/activate.service';
+import LoginService from '@/account/login.service';
 
-describe('Component Tests', () => {
-  describe('ActivateComponent', () => {
-    let comp: ActivateComponent;
+const localVue = createLocalVue();
+const mockedAxios: any = axios;
 
-    beforeEach(async(() => {
-      TestBed.configureTestingModule({
-        imports: [ProjectMjTestModule],
-        declarations: [ActivateComponent],
-        providers: [
-          {
-            provide: ActivatedRoute,
-            useValue: new MockActivatedRoute({ key: 'ABC123' }),
-          },
-        ],
-      })
-        .overrideTemplate(ActivateComponent, '')
-        .compileComponents();
-    }));
+config.initVueApp(localVue);
+const i18n = config.initI18N(localVue);
+const store = config.initVueXStore(localVue);
 
-    beforeEach(() => {
-      const fixture = TestBed.createComponent(ActivateComponent);
-      comp = fixture.componentInstance;
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+}));
+
+describe('Activate Component', () => {
+  let wrapper: Wrapper<ActivateClass>;
+  let activate: ActivateClass;
+
+  beforeEach(() => {
+    mockedAxios.get.mockReset();
+    mockedAxios.get.mockReturnValue(Promise.resolve({}));
+
+    wrapper = shallowMount<ActivateClass>(Activate, {
+      i18n,
+      localVue,
+      provide: {
+        activateService: () => new ActivateService(),
+        loginService: () => new LoginService(),
+      },
     });
+    activate = wrapper.vm;
+  });
 
-    it('calls activate.get with the key from params', inject(
-      [ActivateService],
-      fakeAsync((service: ActivateService) => {
-        spyOn(service, 'get').and.returnValue(of());
+  it('should display error when activation fails using route', async () => {
+    mockedAxios.get.mockReturnValue(Promise.reject({}));
+    activate.beforeRouteEnter({ query: { key: 'invalid-key' } }, null, cb => cb(activate));
+    await activate.$nextTick();
 
-        comp.ngOnInit();
-        tick();
+    expect(activate.error).toBeTruthy();
+    expect(activate.success).toBeFalsy();
+  });
 
-        expect(service.get).toHaveBeenCalledWith('ABC123');
-      })
-    ));
+  it('should display error when activation fails', async () => {
+    mockedAxios.get.mockReturnValue(Promise.reject({}));
+    activate.init('invalid-key');
+    await activate.$nextTick();
 
-    it('should set set success to true upon successful activation', inject(
-      [ActivateService],
-      fakeAsync((service: ActivateService) => {
-        spyOn(service, 'get').and.returnValue(of({}));
+    expect(activate.error).toBeTruthy();
+    expect(activate.success).toBeFalsy();
+  });
 
-        comp.ngOnInit();
-        tick();
+  it('should display success when activation succeeds', async () => {
+    mockedAxios.get.mockReturnValue(Promise.resolve({}));
 
-        expect(comp.error).toBe(false);
-        expect(comp.success).toBe(true);
-      })
-    ));
+    activate.init('valid-key');
+    await activate.$nextTick();
 
-    it('should set set error to true upon activation failure', inject(
-      [ActivateService],
-      fakeAsync((service: ActivateService) => {
-        spyOn(service, 'get').and.returnValue(throwError('ERROR'));
-
-        comp.ngOnInit();
-        tick();
-
-        expect(comp.error).toBe(true);
-        expect(comp.success).toBe(false);
-      })
-    ));
+    expect(activate.error).toBeFalsy();
+    expect(activate.success).toBeTruthy();
   });
 });

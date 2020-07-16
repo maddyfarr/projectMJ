@@ -1,22 +1,120 @@
-import { ComponentFixture, TestBed, async } from '@angular/core/testing';
-import { HttpHeaders, HttpResponse } from '@angular/common/http';
-import { Router, ActivatedRoute } from '@angular/router';
-import { of } from 'rxjs';
-import { advanceTo } from 'jest-date-mock';
+import { shallowMount, createLocalVue, Wrapper } from '@vue/test-utils';
+import axios from 'axios';
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 
-import { ProjectMjTestModule } from '../../../test.module';
-import { AuditsComponent } from 'app/admin/audits/audits.component';
-import { AuditsService } from 'app/admin/audits/audits.service';
-import { Audit } from 'app/admin/audits/audit.model';
-import { ITEMS_PER_PAGE } from 'app/shared/constants/pagination.constants';
-import { MockRouter, MockActivatedRoute } from '../../../helpers/mock-route.service';
+import * as config from '@/shared/config/config';
+import Audits from '@/admin/audits/audits.vue';
+import AuditsClass from '@/admin/audits/audits.component';
+import AuditsService from '@/admin/audits/audits.service';
 
-function build2DigitsDatePart(datePart: number): string {
+const localVue = createLocalVue();
+const mockedAxios: any = axios;
+
+config.initVueApp(localVue);
+const i18n = config.initI18N(localVue);
+const store = config.initVueXStore(localVue);
+localVue.component('font-awesome-icon', FontAwesomeIcon);
+localVue.component('jhi-sort-indicator', {});
+
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  put: jest.fn(),
+}));
+
+describe('Audits Component', () => {
+  let wrapper: Wrapper<AuditsClass>;
+  let audits: AuditsClass;
+
+  beforeEach(() => {
+    mockedAxios.get.mockReset();
+    mockedAxios.get.mockReturnValue(Promise.resolve({ headers: {} }));
+    wrapper = shallowMount<AuditsClass>(Audits, {
+      store,
+      i18n,
+      localVue,
+      stubs: {
+        bPagination: true,
+        jhiItemCount: true,
+      },
+      provide: {
+        auditsService: () => new AuditsService(),
+      },
+    });
+    audits = wrapper.vm;
+  });
+
+  describe('today function ', () => {
+    it('should set toDate to current date', () => {
+      audits.today();
+      expect(audits.toDate).toBe(getDate());
+    });
+  });
+
+  describe('changeOrder function ', () => {
+    it('should change order', () => {
+      audits.changeOrder('id', 'timestamp');
+      expect(audits.propOrder).toBe('id');
+      expect(audits.predicate).toBe('timestamp');
+    });
+  });
+
+  describe('previousMonth function ', () => {
+    it('should set fromDate to current date', () => {
+      audits.previousMonth();
+      expect(audits.fromDate).toBe(getDate(false));
+    });
+  });
+
+  describe('By default, on init', () => {
+    it('should set all default values correctly', async () => {
+      audits.init();
+      await audits.$nextTick();
+
+      expect(audits.predicate).toBe('timestamp');
+      expect(audits.toDate).toBe(getDate());
+      expect(audits.fromDate).toBe(getDate(false));
+      expect(audits.itemsPerPage).toBe(20);
+      expect(audits.page).toBe(1);
+      expect(audits.reverse).toBeFalsy();
+    });
+  });
+
+  describe('OnInit', () => {
+    it('Should call load all on init', async () => {
+      // GIVEN
+      mockedAxios.get.mockReturnValue(
+        Promise.resolve({
+          headers: {},
+          data: [
+            {
+              timestamp: '2020-05-03T18:20:15.590684Z',
+              principal: 'admin',
+              type: 'AUTHENTICATION_SUCCESS',
+            },
+          ],
+        })
+      );
+      const today = getDate();
+      const fromDate = getDate(false);
+      // WHEN
+      audits.init();
+      await audits.$nextTick();
+
+      // THEN
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        `management/audits?fromDate=${fromDate}&toDate=${today}&sort=auditEventDate,desc&sort=id&page=0&size=20`
+      );
+      expect(audits.audits.length).toEqual(1);
+    });
+  });
+});
+
+function build2DigitsDatePart(datePart) {
   return `0${datePart}`.slice(-2);
 }
 
-function getDate(isToday = true): string {
-  let date: Date = new Date();
+function getDate(isToday = true) {
+  let date = new Date();
   if (isToday) {
     // Today + 1 day - needed if the current day must be included
     date.setDate(date.getDate() + 1);
@@ -32,173 +130,3 @@ function getDate(isToday = true): string {
   const dateString = build2DigitsDatePart(date.getDate());
   return `${date.getFullYear()}-${monthString}-${dateString}`;
 }
-
-describe('Component Tests', () => {
-  describe('AuditsComponent', () => {
-    let comp: AuditsComponent;
-    let fixture: ComponentFixture<AuditsComponent>;
-    let service: AuditsService;
-    let mockRouter: MockRouter;
-    let mockActivatedRoute: MockActivatedRoute;
-
-    beforeEach(async(() => {
-      TestBed.configureTestingModule({
-        imports: [ProjectMjTestModule],
-        declarations: [AuditsComponent],
-        providers: [AuditsService],
-      })
-        .overrideTemplate(AuditsComponent, '')
-        .compileComponents();
-    }));
-
-    beforeEach(() => {
-      fixture = TestBed.createComponent(AuditsComponent);
-      comp = fixture.componentInstance;
-      service = fixture.debugElement.injector.get(AuditsService);
-      mockRouter = TestBed.get(Router);
-      mockActivatedRoute = TestBed.get(ActivatedRoute);
-    });
-
-    describe('today function', () => {
-      it('should set toDate to current date', () => {
-        comp.ngOnInit();
-        expect(comp.toDate).toBe(getDate());
-      });
-
-      it('if current day is last day of month then should set toDate to first day of next month', () => {
-        advanceTo(new Date(2019, 0, 31, 0, 0, 0));
-        comp.ngOnInit();
-        expect(comp.toDate).toBe('2019-02-01');
-      });
-
-      it('if current day is not last day of month then should set toDate to next day of current month', () => {
-        advanceTo(new Date(2019, 0, 27, 0, 0, 0));
-        comp.ngOnInit();
-        expect(comp.toDate).toBe('2019-01-28');
-      });
-    });
-
-    describe('previousMonth function', () => {
-      it('should set fromDate to previous month', () => {
-        comp.ngOnInit();
-        expect(comp.fromDate).toBe(getDate(false));
-      });
-
-      it('if current month is January then should set fromDate to previous year last month', () => {
-        advanceTo(new Date(2019, 0, 20, 0, 0, 0));
-        comp.ngOnInit();
-        expect(comp.fromDate).toBe('2018-12-20');
-      });
-
-      it('if current month is not January then should set fromDate to current year previous month', () => {
-        advanceTo(new Date(2019, 1, 20, 0, 0, 0));
-        comp.ngOnInit();
-        expect(comp.fromDate).toBe('2019-01-20');
-      });
-    });
-
-    describe('By default, on init', () => {
-      it('should set all default values correctly', () => {
-        fixture.detectChanges();
-        expect(comp.toDate).toBe(getDate());
-        expect(comp.fromDate).toBe(getDate(false));
-        expect(comp.itemsPerPage).toBe(ITEMS_PER_PAGE);
-        expect(comp.page).toBe(1);
-        expect(comp.ascending).toBe(false);
-        expect(comp.predicate).toBe('id');
-      });
-    });
-
-    describe('OnInit', () => {
-      it('Should call load all on init', () => {
-        // GIVEN
-        const headers = new HttpHeaders().append('X-Total-Count', '1');
-        const audit = new Audit({ remoteAddress: '127.0.0.1', sessionId: '123' }, 'user', '20140101', 'AUTHENTICATION_SUCCESS');
-        spyOn(service, 'query').and.returnValue(
-          of(
-            new HttpResponse({
-              body: [audit],
-              headers,
-            })
-          )
-        );
-
-        // WHEN
-        comp.ngOnInit();
-
-        // THEN
-        expect(service.query).toHaveBeenCalledTimes(1);
-        expect(comp.audits && comp.audits[0]).toEqual(jasmine.objectContaining(audit));
-        expect(comp.totalItems).toBe(1);
-      });
-    });
-
-    describe('Create sort object', () => {
-      beforeEach(() => {
-        spyOn(service, 'query').and.returnValue(of(new HttpResponse({ body: null })));
-      });
-
-      it('Should sort only by id asc', () => {
-        // GIVEN
-        mockActivatedRoute.setParameters({
-          sort: 'id,desc',
-        });
-
-        // WHEN
-        comp.ngOnInit();
-
-        // THEN
-        expect(service.query).toBeCalledWith(
-          expect.objectContaining({
-            sort: ['id,desc'],
-          })
-        );
-      });
-
-      it('Should sort by timestamp asc then by id', () => {
-        // GIVEN
-        mockActivatedRoute.setParameters({
-          sort: 'timestamp,asc',
-        });
-
-        // WHEN
-        comp.ngOnInit();
-
-        // THEN
-        expect(service.query).toBeCalledWith(
-          expect.objectContaining({
-            sort: ['timestamp,asc', 'id'],
-          })
-        );
-      });
-    });
-
-    describe('transition', () => {
-      it('Should not query data if fromDate and toDate are empty', () => {
-        // GIVEN
-        comp.toDate = '';
-        comp.fromDate = '';
-
-        // WHEN
-        comp.transition();
-
-        // THEN
-        expect(comp.canLoad()).toBe(false);
-        expect(mockRouter.navigateSpy).not.toBeCalled();
-      });
-
-      it('Should query data if fromDate and toDate are not empty', () => {
-        // GIVEN
-        comp.toDate = getDate();
-        comp.fromDate = getDate(false);
-
-        // WHEN
-        comp.transition();
-
-        // THEN
-        expect(comp.canLoad()).toBe(true);
-        expect(mockRouter.navigateSpy).toBeCalled();
-      });
-    });
-  });
-});

@@ -1,106 +1,112 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { HttpResponse, HttpHeaders } from '@angular/common/http';
-import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { Subscription, combineLatest } from 'rxjs';
-import { ActivatedRoute, ParamMap, Router, Data } from '@angular/router';
-import { JhiEventManager } from 'ng-jhipster';
-
-import { ITEMS_PER_PAGE } from 'app/shared/constants/pagination.constants';
-import { AccountService } from 'app/core/auth/account.service';
-import { Account } from 'app/core/user/account.model';
-import { UserService } from 'app/core/user/user.service';
-import { User } from 'app/core/user/user.model';
-import { UserManagementDeleteDialogComponent } from './user-management-delete-dialog.component';
+import { Component, Inject } from 'vue-property-decorator';
+import { mixins } from 'vue-class-component';
+import Vue2Filters from 'vue2-filters';
+import UserManagementService from './user-management.service';
+import AlertMixin from '@/shared/alert/alert.mixin';
 
 @Component({
-  selector: 'jhi-user-mgmt',
-  templateUrl: './user-management.component.html',
+  mixins: [Vue2Filters.mixin],
 })
-export class UserManagementComponent implements OnInit, OnDestroy {
-  currentAccount: Account | null = null;
-  users: User[] | null = null;
-  userListSubscription?: Subscription;
-  totalItems = 0;
-  itemsPerPage = ITEMS_PER_PAGE;
-  page!: number;
-  predicate!: string;
-  ascending!: boolean;
+export default class JhiUserManagementComponent extends mixins(AlertMixin) {
+  @Inject('userService') private userManagementService: () => UserManagementService;
+  public error = '';
+  public success = '';
+  public users: any[] = [];
+  public itemsPerPage = 20;
+  public queryCount: number = null;
+  public page = 1;
+  public previousPage = 1;
+  public propOrder = 'id';
+  public reverse = false;
+  public totalItems = 0;
+  public removeId: number = null;
 
-  constructor(
-    private userService: UserService,
-    private accountService: AccountService,
-    private activatedRoute: ActivatedRoute,
-    private router: Router,
-    private eventManager: JhiEventManager,
-    private modalService: NgbModal
-  ) {}
-
-  ngOnInit(): void {
-    this.accountService.identity().subscribe(account => (this.currentAccount = account));
-    this.userListSubscription = this.eventManager.subscribe('userListModification', () => this.loadAll());
-    this.handleNavigation();
+  public mounted(): void {
+    this.loadAll();
   }
 
-  ngOnDestroy(): void {
-    if (this.userListSubscription) {
-      this.eventManager.destroy(this.userListSubscription);
-    }
+  public setActive(user, isActivated): void {
+    user.activated = isActivated;
+    this.userManagementService()
+      .update(user)
+      .then(() => {
+        this.error = null;
+        this.success = 'OK';
+        this.loadAll();
+      })
+      .catch(() => {
+        this.success = null;
+        this.error = 'ERROR';
+        user.activated = false;
+      });
   }
 
-  setActive(user: User, isActivated: boolean): void {
-    this.userService.update({ ...user, activated: isActivated }).subscribe(() => this.loadAll());
-  }
-
-  trackIdentity(index: number, item: User): any {
-    return item.id;
-  }
-
-  deleteUser(user: User): void {
-    const modalRef = this.modalService.open(UserManagementDeleteDialogComponent, { size: 'lg', backdrop: 'static' });
-    modalRef.componentInstance.user = user;
-  }
-
-  transition(): void {
-    this.router.navigate(['./'], {
-      relativeTo: this.activatedRoute.parent,
-      queryParams: {
-        page: this.page,
-        sort: this.predicate + ',' + (this.ascending ? 'asc' : 'desc'),
-      },
-    });
-  }
-
-  private handleNavigation(): void {
-    combineLatest(this.activatedRoute.data, this.activatedRoute.queryParamMap, (data: Data, params: ParamMap) => {
-      const page = params.get('page');
-      this.page = page !== null ? +page : 1;
-      const sort = (params.get('sort') ?? data['defaultSort']).split(',');
-      this.predicate = sort[0];
-      this.ascending = sort[1] === 'asc';
-      this.loadAll();
-    }).subscribe();
-  }
-
-  private loadAll(): void {
-    this.userService
-      .query({
+  public loadAll(): void {
+    this.userManagementService()
+      .retrieve({
         page: this.page - 1,
         size: this.itemsPerPage,
         sort: this.sort(),
       })
-      .subscribe((res: HttpResponse<User[]>) => this.onSuccess(res.body, res.headers));
+      .then(res => {
+        this.users = res.data;
+        this.totalItems = Number(res.headers['x-total-count']);
+        this.queryCount = this.totalItems;
+      });
   }
 
-  private sort(): string[] {
-    const result = [this.predicate + ',' + (this.ascending ? 'asc' : 'desc')];
-    if (this.predicate !== 'id') {
+  public sort(): any {
+    const result = [this.propOrder + ',' + (this.reverse ? 'asc' : 'desc')];
+    if (this.propOrder !== 'id') {
       result.push('id');
     }
     return result;
   }
 
-  private onSuccess(users: User[] | null, headers: HttpHeaders): void {
-    this.totalItems = Number(headers.get('X-Total-Count'));
-    this.users = users;
+  public loadPage(page: number): void {
+    if (page !== this.previousPage) {
+      this.previousPage = page;
+      this.transition();
+    }
+  }
+
+  public transition(): void {
+    this.loadAll();
+  }
+
+  public changeOrder(propOrder: string): void {
+    this.propOrder = propOrder;
+    this.reverse = !this.reverse;
+    this.transition();
+  }
+
+  public deleteUser(): void {
+    this.userManagementService()
+      .remove(this.removeId)
+      .then(res => {
+        const message = this.$t(res.headers['x-projectmjapp-alert'], {
+          param: decodeURIComponent(res.headers['x-projectmjapp-params'].replace(/\+/g, ' ')),
+        });
+        this.alertService().showAlert(message, 'danger');
+        this.getAlertFromStore();
+        this.removeId = null;
+        this.loadAll();
+        this.closeDialog();
+      });
+  }
+
+  public prepareRemove(instance): void {
+    this.removeId = instance.login;
+    if (<any>this.$refs.removeUser) {
+      (<any>this.$refs.removeUser).show();
+    }
+  }
+
+  public closeDialog(): void {
+    (<any>this.$refs.removeUser).hide();
+  }
+
+  public get username(): string {
+    return this.$store.getters.account ? this.$store.getters.account.login : '';
   }
 }

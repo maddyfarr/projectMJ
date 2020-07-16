@@ -12,22 +12,15 @@ Before you can build this project, you must install and configure the following 
 After installing Node, you should be able to run the following command to install development tools.
 You will only need to run this command when dependencies change in [package.json](package.json).
 
-```
-npm install
-```
+    npm install
 
 We use npm scripts and [Webpack][] as our build system.
 
 Run the following commands in two separate terminals to create a blissful development experience where your browser
 auto-refreshes when files change on your hard drive.
 
-```
-
-./mvnw
-
-
-npm start
-```
+    ./mvnw
+    npm start
 
 Npm is also used to manage CSS and JavaScript dependencies used in this application. You can upgrade dependencies by
 specifying a newer version in [package.json](package.json). You can also run `npm update` and `npm install` to manage dependencies.
@@ -35,11 +28,11 @@ Add the `help` flag on any command to see how you can use it. For example, `npm 
 
 The `npm run` command will list all of the scripts available to run for this project.
 
-### PWA Support
+### Service workers
 
-JHipster ships with PWA (Progressive Web App) support, and it's turned off by default. One of the main components of a PWA is a service worker.
+Service workers are commented by default, to enable them please uncomment the following code.
 
-The service worker initialization code is commented out by default. To enable it, uncomment the following code in `src/main/webapp/index.html`:
+- The service worker registering script in index.html
 
 ```html
 <script>
@@ -51,24 +44,20 @@ The service worker initialization code is commented out by default. To enable it
 </script>
 ```
 
-Note: [Workbox](https://developers.google.com/web/tools/workbox/) powers JHipster's service worker. It dynamically generates the `service-worker.js` file.
+Note: workbox creates the respective service worker and dynamically generate the `service-worker.js`
 
 ### Managing dependencies
 
 For example, to add [Leaflet][] library as a runtime dependency of your application, you would run following command:
 
-```
-npm install --save --save-exact leaflet
-```
+    npm install --save --save-exact leaflet
 
 To benefit from TypeScript type definitions from [DefinitelyTyped][] repository in development, you would run following command:
 
-```
-npm install --save-dev --save-exact @types/leaflet
-```
+    npm install --save-dev --save-exact @types/leaflet
 
 Then you would import the JS and CSS files specified in library's installation instructions so that [Webpack][] knows about them:
-Edit [src/main/webapp/app/vendor.ts](src/main/webapp/app/vendor.ts) file:
+Edit [src/main/webapp/app/main.ts](src/main/webapp/app/main.ts) file:
 
 ```
 import 'leaflet/dist/leaflet.js';
@@ -77,30 +66,22 @@ import 'leaflet/dist/leaflet.js';
 Edit [src/main/webapp/content/scss/vendor.scss](src/main/webapp/content/scss/vendor.scss) file:
 
 ```
-@import '~leaflet/dist/leaflet.css';
+@import '~leaflet/dist/leaflet.scss';
 ```
 
-Note: There are still a few other things remaining to do for Leaflet that we won't detail here.
+Note: there are still few other things remaining to do for Leaflet that we won't detail here.
 
 For further instructions on how to develop with JHipster, have a look at [Using JHipster in development][].
 
-### Using Angular CLI
+### Using vue-cli
 
-You can also use [Angular CLI][] to generate some custom client code.
+You can also use [Vue CLI][] to display the project using vue UI.
 
 For example, the following command:
 
-```
-ng generate component my-component
-```
+    vue ui
 
-will generate few files:
-
-```
-create src/main/webapp/app/my-component/my-component.component.html
-create src/main/webapp/app/my-component/my-component.component.ts
-update src/main/webapp/app/app.module.ts
-```
+will generate open Vue Project Manager. From there, you'll be able to manage your project as any other Vue.js projects.
 
 ## Building for production
 
@@ -108,22 +89,12 @@ update src/main/webapp/app/app.module.ts
 
 To build the final jar and optimize the projectMJ application for production, run:
 
-```
-
-./mvnw -Pprod clean verify
-
-
-```
+    ./mvnw -Pprod clean verify
 
 This will concatenate and minify the client CSS and JavaScript files. It will also modify `index.html` so it references these new files.
 To ensure everything worked, run:
 
-```
-
-java -jar target/*.jar
-
-
-```
+    java -jar target/*.jar
 
 Then navigate to [http://localhost:8080](http://localhost:8080) in your browser.
 
@@ -133,28 +104,17 @@ Refer to [Using JHipster in production][] for more details.
 
 To package your application as a war in order to deploy it to an application server, run:
 
-```
-
-./mvnw -Pprod,war clean verify
-
-
-```
+    ./mvnw -Pprod,war clean verify
 
 ## Testing
 
 To launch your application's tests, run:
-
-```
 ./mvnw verify
-```
 
 ### Client tests
 
 Unit tests are run by [Jest][] and written with [Jasmine][]. They're located in [src/test/javascript/](src/test/javascript/) and can be run with:
-
-```
 npm test
-```
 
 For more information, refer to the [Running tests page][].
 
@@ -167,7 +127,6 @@ docker-compose -f src/main/docker/sonar.yml up -d
 ```
 
 You can run a Sonar analysis with using the [sonar-scanner](https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner) or by using the maven plugin.
-
 Then, run a Sonar analysis:
 
 ```
@@ -180,6 +139,7 @@ If you need to re-run the Sonar phase, please be sure to specify at least the `i
 ./mvnw initialize sonar:sonar
 ```
 
+or
 For more information, refer to the [Code quality page][].
 
 ## Using Docker to simplify development (optional)
@@ -187,30 +147,15 @@ For more information, refer to the [Code quality page][].
 You can use Docker to improve your JHipster development experience. A number of docker-compose configuration are available in the [src/main/docker](src/main/docker) folder to launch required third party services.
 
 For example, to start a mysql database in a docker container, run:
-
-```
 docker-compose -f src/main/docker/mysql.yml up -d
-```
-
 To stop it and remove the container, run:
-
-```
 docker-compose -f src/main/docker/mysql.yml down
-```
 
 You can also fully dockerize your application and all the services that it depends on.
 To achieve this, first build a docker image of your app by running:
-
-```
 ./mvnw -Pprod verify jib:dockerBuild
-```
-
 Then run:
-
-```
 docker-compose -f src/main/docker/app.yml up -d
-```
-
 For more information refer to [Using Docker and Docker-Compose][], this page also contains information on the docker-compose sub-generator (`jhipster docker-compose`), which is able to generate docker configurations for one or several JHipster applications.
 
 ## Continuous Integration (optional)
@@ -228,10 +173,10 @@ To configure CI for your project, run the ci-cd sub-generator (`jhipster ci-cd`)
 [node.js]: https://nodejs.org/
 [yarn]: https://yarnpkg.org/
 [webpack]: https://webpack.github.io/
-[angular cli]: https://cli.angular.io/
+[vue cli]: https://cli.vuejs.org/
 [browsersync]: https://www.browsersync.io/
 [jest]: https://facebook.github.io/jest/
 [jasmine]: https://jasmine.github.io/2.0/introduction.html
-[protractor]: https://angular.github.io/protractor/
+[protractor]: https://www.protractortest.org/
 [leaflet]: https://leafletjs.com/
 [definitelytyped]: https://definitelytyped.org/
